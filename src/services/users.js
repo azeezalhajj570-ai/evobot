@@ -17,6 +17,15 @@ module.exports = {
     return rows[0] || null;
   },
 
+  /** Check whether a phone number is already linked by any Telegram user */
+  async findByPhoneNumber(phoneNumber) {
+    const { rows } = await pool.query(
+      'SELECT * FROM users WHERE phone_number = $1',
+      [phoneNumber]
+    );
+    return rows[0] || null;
+  },
+
   /** Create a new user record */
   async createUser({ telegramUserId, phoneNumber, instanceName, connectionStatus = 'disconnected' }) {
     const { rows } = await pool.query(

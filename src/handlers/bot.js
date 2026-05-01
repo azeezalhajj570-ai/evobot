@@ -83,7 +83,21 @@ bot.start(async (ctx) => {
 // ─── CONNECT ─────────────────────────────────────────────────────────────────
 
 bot.action('action_connect', async (ctx) => {
-  awaitingPhone.add(ctx.from.id);
+  const telegramUserId = ctx.from.id;
+
+  // ── Single-account check: block if user already has an instance ──────
+  const existingUser = await userService.findByTelegramId(telegramUserId);
+
+  if (existingUser) {
+    await ctx.reply(
+      '⚠️ You already have one connected WhatsApp account\\.\n\n' +
+      'Disconnect or *Delete* it before connecting another\\.',
+      { parse_mode: 'MarkdownV2', ...menuForUser(telegramUserId) }
+    );
+    return;
+  }
+
+  awaitingPhone.add(telegramUserId);
 
   await ctx.reply(
     '📱 Please send your WhatsApp phone number with country code.\n\n' +
@@ -192,27 +206,27 @@ bot.on('text', async (ctx) => {
     return;
   }
 
+  // ── Single-account: reject if this WhatsApp number is already linked ──
+  const phoneOwner = await userService.findByPhoneNumber(cleanPhone);
+  if (phoneOwner) {
+    await ctx.reply(
+      '⚠️ This WhatsApp number is already linked to another Telegram account\\.\n\nEach WhatsApp number can only be connected once\\.',
+      { parse_mode: 'MarkdownV2', ...unverifiedMenu() }
+    );
+    return;
+  }
+
   await ctx.reply('⏳ Creating your WhatsApp instance...');
 
   try {
     const instanceName = evolutionService.instanceName(telegramUserId);
-    let user = await userService.findByTelegramId(telegramUserId);
 
-    const phoneChanged = user && user.phone_number !== cleanPhone;
-
-    if (user) {
-      await userService.updatePhoneNumber(telegramUserId, cleanPhone);
-      // Phone changed → require re-verification
-      if (phoneChanged) {
-        await userService.resetVerification(telegramUserId);
-      }
-    } else {
-      user = await userService.createUser({
-        telegramUserId,
-        phoneNumber: cleanPhone,
-        instanceName,
-      });
-    }
+    // At this point we already confirmed no existing user for this telegram ID
+    await userService.createUser({
+      telegramUserId,
+      phoneNumber: cleanPhone,
+      instanceName,
+    });
 
     const result = await evolutionService.createAndConnect(telegramUserId, cleanPhone);
     await userService.updateStatus(telegramUserId, 'pending_qr');
@@ -475,7 +489,12 @@ bot.action('action_disconnect_confirm', async (ctx) => {
   try {
     await evolutionService.logout(telegramUserId);
     await userService.updateStatus(telegramUserId, 'disconnected');
-    await ctx.reply('✅ Disconnected. Click *Reconnect* whenever you want to link again.', verifiedMenu());
+    // Keep record alive — user must Delete before they can Connect a different number
+    await ctx.reply(
+      '✅ Disconnected\\. Your account record is kept so you can *Reconnect* anytime\\.\n\n' +
+      'If you want to connect a *different* WhatsApp number, use *Delete* first\\.',
+      { parse_mode: 'MarkdownV2', ...verifiedMenu() }
+    );
   } catch (err) {
     console.error('Disconnect error:', err.message);
     await ctx.reply(`❌ Disconnect failed: ${escapeHtml(err.message)}`, verifiedMenu());

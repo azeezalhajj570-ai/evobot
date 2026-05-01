@@ -1,10 +1,10 @@
 require('dotenv').config();
-const env = require('./config/env');
-const bot = require('./handlers/bot');
-const userService = require('./services/users');
+const env = require('./src/config/env');
+const bot = require('./src/handlers/bot');
+const userService = require('./src/services/users');
 
 // Validate required environment variables on startup
-const required = ['BOT_TOKEN', 'EVOLUTION_API_URL', 'EVOLUTION_API_KEY', 'DATABASE_URL'];
+const required = ['BOT_TOKEN', 'EVOLUTION_API_URL', 'EVOLUTION_API_KEY', 'DATABASE_URL', 'OTP_SECRET'];
 const missing = required.filter((key) => !env[key]);
 if (missing.length > 0) {
   console.error(`Missing required environment variables: ${missing.join(', ')}`);

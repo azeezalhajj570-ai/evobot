@@ -1,13 +1,22 @@
 const { Markup } = require('telegraf');
 
-/** Main menu inline keyboard shown on /start and after most actions */
-function mainMenu() {
+/** Menu shown to verified users — full access */
+function verifiedMenu() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('🔗 Connect', 'action_connect')],
     [Markup.button.callback('🔄 Reconnect', 'action_reconnect')],
     [Markup.button.callback('🔌 Disconnect', 'action_disconnect')],
     [Markup.button.callback('🗑️ Delete', 'action_delete')],
     [Markup.button.callback('📊 Status', 'action_status')],
+  ]);
+}
+
+/** Menu shown to unverified users — limited to connect and OTP actions */
+function unverifiedMenu() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('🔗 Connect', 'action_connect')],
+    [Markup.button.callback('✅ Verify OTP', 'action_verify_otp')],
+    [Markup.button.callback('🔄 Resend OTP', 'action_resend_otp')],
   ]);
 }
 
@@ -31,4 +40,4 @@ function confirmDisconnect() {
   ]);
 }
 
-module.exports = { mainMenu, confirmDelete, confirmDisconnect };
+module.exports = { verifiedMenu, unverifiedMenu, confirmDelete, confirmDisconnect };

@@ -44,19 +44,16 @@ async function reconnect(telegramUserId) {
 
 /** Parse QR / pairing-code response from Evolution API */
 function parseQrResponse(data, name) {
-  // Evolution API may return a base64 QR code or a pairing code depending on version
   if (data && data.pairingCode) {
     return { type: 'pairing_code', value: data.pairingCode, instanceName: name };
   }
 
   if (data && data.base64) {
-    // Strip the data URL prefix if present (e.g. "data:image/png;base64,")
     const base64 = data.base64.replace(/^data:image\/\w+;base64,/, '');
     return { type: 'qr', value: base64, instanceName: name };
   }
 
   if (data && data.code) {
-    // Some versions return a raw base64 string in "code"
     const base64 = data.code.replace(/^data:image\/\w+;base64,/, '');
     return { type: 'qr', value: base64, instanceName: name };
   }
@@ -74,7 +71,6 @@ async function fetchStatus(telegramUserId) {
       const instance = data[0];
       return instance.state || instance.status || 'unknown';
     }
-    // The newer API may return the instance directly
     if (data && data.state) {
       return data.state;
     }
@@ -100,12 +96,24 @@ async function deleteInstance(telegramUserId) {
   try {
     await api.delete(`/instance/delete/${name}`);
   } catch (err) {
-    // If it's already gone, that's fine
     if (err.response && err.response.status === 404) {
       return;
     }
     throw err;
   }
+}
+
+/**
+ * Send a text message to a WhatsApp number through a connected instance.
+ * The instance must be in "open" / connected state.
+ */
+async function sendTextMessage(telegramUserId, phoneNumber, text) {
+  const name = instanceName(telegramUserId);
+
+  await api.post(`/message/sendText/${name}`, {
+    number: phoneNumber,
+    text: text,
+  });
 }
 
 module.exports = {
@@ -114,5 +122,6 @@ module.exports = {
   fetchStatus,
   logout,
   deleteInstance,
+  sendTextMessage,
   instanceName,
 };

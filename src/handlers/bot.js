@@ -56,6 +56,22 @@ function escapeHtml(text) {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/** Poll Evolution API for QR code with retries (v2 sometimes returns count=0 initially) */
+async function pollForQr(telegramUserId, retries = 10, delayMs = 2000) {
+  for (let i = 0; i < retries; i++) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    try {
+      const result = await evolutionService.reconnect(telegramUserId);
+      if (result.type === 'qr' || result.type === 'pairing_code') {
+        return result;
+      }
+    } catch (err) {
+      console.error(`QR poll attempt ${i + 1} failed:`, err.message);
+    }
+  }
+  return null;
+}
+
 // ─── /start ──────────────────────────────────────────────────────────────────
 
 bot.start(async (ctx) => {
@@ -242,6 +258,27 @@ bot.on('text', async (ctx) => {
         { source: buffer },
         { caption: '✅ Instance created!\n\nScan this QR code in WhatsApp → Linked Devices.' }
       );
+    } else if (result.type === 'pending') {
+      // QR not ready yet — poll for it
+      await ctx.reply('⏳ Instance created. Waiting for QR code...');
+      const qrResult = await pollForQr(telegramUserId);
+      if (qrResult && qrResult.type === 'qr') {
+        const buffer = Buffer.from(qrResult.value, 'base64');
+        await ctx.replyWithPhoto(
+          { source: buffer },
+          { caption: 'Scan this QR code in WhatsApp → Linked Devices.' }
+        );
+      } else if (qrResult && qrResult.type === 'pairing_code') {
+        await ctx.reply(
+          `🔑 *Pairing Code:* \`${escapeMd(qrResult.value)}\`\n\nEnter this in WhatsApp → Linked Devices\\.`,
+          { parse_mode: 'MarkdownV2' }
+        );
+      } else {
+        await ctx.reply(
+          '⚠️ QR code not ready yet\\. Click *Reconnect* after a few seconds to get the code\\.',
+          { parse_mode: 'MarkdownV2' }
+        );
+      }
     } else {
       await ctx.reply(
         '⚠️ Instance created but no QR or pairing code returned. Try *Reconnect*.',
@@ -452,6 +489,25 @@ bot.action('action_reconnect', async (ctx) => {
         { source: buffer },
         { caption: 'Scan this new QR code in WhatsApp → Linked Devices.' }
       );
+    } else if (result.type === 'pending') {
+      // QR not ready yet — poll for it
+      await ctx.reply('⏳ Waiting for QR code...');
+      const qrResult = await pollForQr(telegramUserId);
+      if (qrResult && qrResult.type === 'qr') {
+        const buffer = Buffer.from(qrResult.value, 'base64');
+        await ctx.replyWithPhoto(
+          { source: buffer },
+          { caption: 'Scan this QR code in WhatsApp → Linked Devices.' }
+        );
+      } else if (qrResult && qrResult.type === 'pairing_code') {
+        await ctx.reply(
+          `🔑 *Pairing Code:* \`${escapeMd(qrResult.value)}\`\n\nEnter this in WhatsApp → Linked Devices\\.`,
+          { parse_mode: 'MarkdownV2' }
+        );
+      } else {
+        await ctx.reply('⚠️ QR code still not ready. Try *Reconnect* again in a few seconds.', verifiedMenu());
+        return;
+      }
     } else {
       await ctx.reply('⚠️ No QR or pairing code returned. Your instance may already be connected.');
     }
